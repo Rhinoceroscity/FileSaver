@@ -3,10 +3,10 @@ import pymel.core
 from pymel.core import windows, system, general, language
 from subprocess import call
 import os, glob, time, shutil
+#import checkModeling
 
 #Define global variables
 makes = ("Fiat","Datsun","Kia","Nissan","Mitsubishi","VW","Hyundai","Mercedes","Unknown")
-
 
 #Function allows for a shell command to be executed, or else it times out
 #Not written by me
@@ -23,6 +23,10 @@ def waitfor(command, timeout):
             os.kill(process.pid, signal.SIGKILL)
             os.waitpid(-1, os.WNOHANG)
             return None
+
+#Reverse enumerate function
+def reverse_enumerate(list):
+    return zip( reversed(range(len(list))), reversed(list) )
 
 #Opens a window at the specified directory
 def openFinderDirectory(_dir):
@@ -138,39 +142,41 @@ class OEMToolbar():
     #The main toolbar class for all the windows and such that modelers can use
     #In the future the individual modules could probably become their own classes
     def __init__(self):
-        #Init all the necessary things, like the GUI, the variables, and then populate the appropriate lists
-        #Also load user settings if necessary.  Load the user settings after the lists have been populated
-        #Otherwise problems might arise.
-        waitfor("""osascript -e 'mount volume "afp://xserve1._afpovertcp._tcp.local/Client_Projects"'""", 30)
-        waitfor("""osascript -e 'mount volume "afp://xserve1._afpovertcp._tcp.local/bto-secure"'""", 30)
-        
-        #Clear all windows that already exist with these names
-        if windows.window("OEMToolbar_Settings", exists=True):
-            windows.deleteUI("OEMToolbar_Settings")
-        if windows.window("loadingWindow", exists=True):
+        if windows.confirmDialog(title = "Run OEM Toolbar?", message = "This script will engage locks on the save and load functions.  If you are working on something separate, please save it.  Are you sure you'd like to run the script?", button = ['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')=='Yes':
+            #Init all the necessary things, like the GUI, the variables, and then populate the appropriate lists
+            #Also load user settings if necessary.  Load the user settings after the lists have been populated
+            #Otherwise problems might arise.
+            waitfor("""osascript -e 'mount volume "afp://xserve1._afpovertcp._tcp.local/Client_Projects"'""", 30)
+            waitfor("""osascript -e 'mount volume "afp://xserve1._afpovertcp._tcp.local/bto-secure"'""", 30)
+            
+            #Clear all windows that already exist with these names
+            if windows.window("OEMToolbar_Settings", exists=True):
+                windows.deleteUI("OEMToolbar_Settings")
+            if windows.window("loadingWindow", exists=True):
+                windows.deleteUI("loadingWindow")
+            if windows.window("OEMToolbar_SaveGUI", exists = True):
+                windows.deleteUI("OEMToolbar_SaveGUI")
+            if windows.window("OEMToolbar_Toolbar", exists = True):
+                windows.deleteUI("OEMToolbar_Toolbar")
+            if windows.window("OEMToolbar_ReferencePanel", exists = True):
+                windows.deleteUI("OEMToolbar_ReferencePanel")
+            
+            #Clear the window preference for the loading window
+            if windows.windowPref("loadingWindow", exists=True):
+                windows.windowPref("loadingWindow", remove=True)
+            
+            #Show the loading window
+            self.OEM_LoadingWindow_GUI()
+            #Initialize the vars while the loading window is up
+            #Finding the projects takes a while, so at least the user will know something is happening
+            self.initializeVars()
+            #Once the variables have been created, remove the loading window and initialize the toolbar GUI
             windows.deleteUI("loadingWindow")
-        if windows.window("OEMToolbar_SaveGUI", exists = True):
-            windows.deleteUI("OEMToolbar_SaveGUI")
-        if windows.window("OEMToolbar_Toolbar", exists = True):
-            windows.deleteUI("OEMToolbar_Toolbar")
-        if windows.window("OEMToolbar_ReferencePanel", exists = True):
-            windows.deleteUI("OEMToolbar_ReferencePanel")
-        
-        #Clear the window preference for the loading window
-        if windows.windowPref("loadingWindow", exists=True):
-            windows.windowPref("loadingWindow", remove=True)
-        
-        #Show the loading window
-        self.OEM_LoadingWindow_GUI()
-        #Initialize the vars while the loading window is up
-        #Finding the projects takes a while, so at least the user will know something is happening
-        self.initializeVars()
-        #Once the variables have been created, remove the loading window and initialize the toolbar GUI
-        windows.deleteUI("loadingWindow")
-        self.OEMToolbar_GUI()
-        #Finally, load the settings from the preference file, if it exists
-        #This should be converted to a JSON file at some point
-        self.loadSettings()
+            self.OEMToolbar_GUI()
+            #Finally, load the settings from the preference file, if it exists
+            #This should be converted to a JSON file at some point
+            self.loadSettings()
+            self.overrideSaveFunction()
     
     def selectNewProject(self, index):
         #Select a new project from the master project list by index
@@ -213,7 +219,6 @@ class OEMToolbar():
         global proc FileMenu_SaveItem()
         {python("f.saveFile(0)");}
         
-        
         global proc SaveSceneAs()
         {python("f.saveFile(0)");}
         
@@ -233,7 +238,7 @@ class OEMToolbar():
         {confirmDialog -title "Restart Maya" -message "If you want to open a scene independently of the file structure script, please restart Maya." -button "Dismiss";}
         '''
         language.mel.eval(override)
-
+    
     def initializeVars(self):
         #Initialize necessary variables
         
@@ -294,12 +299,16 @@ class OEMToolbar():
                                                 filenum = x + filenum
                                             else:
                                                 break
-                                        filenum = int(filenum)
-                                        #Compare what should be the file number against whatever the highest number is currently
-                                        if filenum>highest_num:
-                                            #If its higher, set the highest filenum to the one we just found, and the latest file to the one in this current iteration
-                                            highest_num = filenum
-                                            latest_file = file
+                                        #Guard against people renaming files and putting non-integers at the end
+                                        #Don't even try to compute these.  If it didn't find any numbers, theres nothing
+                                        #To compare
+                                        if len(filenum)>0:
+                                            filenum = int(filenum)
+                                            #Compare what should be the file number against whatever the highest number is currently
+                                            if filenum>highest_num:
+                                                #If its higher, set the highest filenum to the one we just found, and the latest file to the one in this current iteration
+                                                highest_num = filenum
+                                                latest_file = file
                                 else:
                                     if latest_file==None:
                                         #If there were files found, but it didnt properly locate a valid one, do nothing
@@ -322,6 +331,70 @@ class OEMToolbar():
                                 self.refreshReferencesUI()
         except IndexError as E:
             print("Index Error occured while loading: %s"%(E))
+    
+    def getPartName(self):
+        return os.path.split(system.sceneName())[1].split("_")[0]
+    
+    def findPartPIDStructure(self):
+        partName = self.getPartName()
+        pid_map_file = "/rendershare/LIBRARY/cg_production/00_resources/production_scripts/Modeling_Pipeline/defaultParts"
+        pid_structure = ""
+        #Run the check once for one directory
+        if not os.path.isfile(pid_map_file):
+            pid_map_file = "/Volumes/LIBRARY/cg_production/00_resources/production_scripts/Modeling_Pipeline/defaultParts"
+        #Run it again for a differently mounted one.  If it still doesnt find it, it probably just doesn't exist
+        if not os.path.isfile(pid_map_file):
+            print("PID map not found")
+            return None
+        
+        file = open(pid_map_file, "r")
+        for line in file:
+            if ":" in line.rstrip("\n"):
+                if line.split(":")[0] == partName:
+                    pid_structure = line.split(":")[1]
+                    if pid_structure!="":
+                        print("PID map found")
+                        return pid_structure
+        print("PID map not found")
+        return None
+    
+    def attemptBakePID(self):
+        pid_structure = self.findPartPIDStructure()
+        if pid_structure!=None:
+            general.select(cl = True)
+            general.select(general.ls(tr = True))
+            general.select(general.ls(geometry = True), add = True)
+            for node in general.selected():
+                general.addAttr(node, longName = "EvoxPIDMap", dt = "string")
+                general.setAttr(node+".EvoxPIDMap", pid_structure)
+            return True
+        return None
+    
+    def attemptAutoPID(self):
+        #Now we need to find out the PID structure for this particular part
+        #This is contained in a file that maps it out.
+        pid_structure = self.findPartPIDStructure()
+        if pid_structure!=None:
+            #Split out the group names, so that we can do a chain of group functions
+            nodes=[]
+            #Split the string into group names
+            if "|" in pid_structure:  pid_structure=pid_structure.rstrip("\n").split("|")
+            else: pid_structure = [pid_structure.rstrip("\n"),]
+            print("PID Structure: %s"%(str(pid_structure)))
+            #If we got any group names, which we should have at least one always
+            for node in pid_structure:
+                nodes.append(general.group(em=True, n = node))
+            [general.parent(x, nodes[-1]) for x in general.ls(geometry = True)]
+            #Perform a chain of parents for PID structures larger than one node
+            if len(pid_structure)>1:
+                for index, node in enumerate(nodes):
+                    if index>0:
+                        general.parent(node, nodes[index-1])
+            return pid_structure[0]
+        else:
+            print("No PID Map found")
+        return None
+                    
     
     def saveFile(self, type=0):
         #So this function needs to look into the proper component folder (if it exists), find the Working folder (if it exists, if not make it)
@@ -368,14 +441,17 @@ class OEMToolbar():
                                         if os.path.isfile(file):
                                             _fname = str(os.path.split(file)[1].split(".")[0])
                                             filenum=''
+                                            
                                             for x in reversed(_fname):
                                                 if x.isdigit():
                                                     filenum = x + filenum
                                                 else:
                                                     break
-                                            filenum = int(filenum)
-                                            if filenum>highest_num:
-                                                highest_num = filenum
+                                            
+                                            if len(filenum)>0:
+                                                filenum = int(filenum)
+                                                if filenum>highest_num:
+                                                    highest_num = filenum
                                     else:
                                         #Once we've finished the loop, increment the highest number up one
                                         #If no other files were found, this will end up with the number one
@@ -438,13 +514,17 @@ class OEMToolbar():
                             
                             #Clear the selection
                             general.select(clear = True)
+                            #Attempt to Auto PID things
+                            if self.attemptBakePID()!=None: print("Auto PID success")
+                            else: print("Auto PID failed")
                             #Select all the geometry in the scene
                             general.select(general.ls(geometry = True))
+                            general.select(general.ls(tr = True), add = True)
                             #Build a name for the layer that will contain this geometry
                             layerName = os.path.split(system.sceneName())[1].split("_")[0].replace(" ", "_")
                             #Create a display layer for it
                             general.createDisplayLayer(name = layerName)
-                            #Save the publish file, then immediately resave again as the working file so the filename doesn't change
+                            #Save the publish file, then immediately open the working file so the filename doesn't change
                             system.saveAs(file_name)
                             system.openFile(current_filename, f = True)
                     #If its type 2, its a QA submit
@@ -454,33 +534,40 @@ class OEMToolbar():
                             #Get the time and build a string out of it to append to the name of the file
                             _time = time.strftime("%b%d_%Y_%H-%M-%S", time.localtime(time.time()))
                             file_name = os.path.join(qa_dir, part_name + "_%s_%s.mb"%(self.username,_time))
+                            print("Saving QA file...")
                             
                             #Search for any QA files that already exist, and move them into folders if they do
                             _files = glob.glob(qa_dir+"/*.mb")
                             if len(_files)>0:
+                                print("QA MB File found, needs moved")
                                 found=False
                                 #Iterate through the files
                                 for i in _files:
                                     #If we find an exact duplicate of the current filename, show a prompt for saving over it
                                     if file_name == i:
+                                        print("Found file with exact name.")
                                         found=True
                                         if windows.confirmDialog(title = "Overwrite?", message = "A QA file with this name already exists.  Overwrite it?", button = ['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')=='Yes': 
+                                            print("File with exact name overwritten.")
                                             current_filename = system.sceneName()
                                             system.saveAs(file_name)
                                             system.saveAs(current_filename)
                                     else:
                                         #Otherwise, move it into a folder with the necessary info
+                                        print("Moving other QA file into folder")
                                         _folder = os.path.join(qa_dir,os.path.split(i)[1].split(".")[0])
                                         os.makedirs(_folder)
                                         shutil.move(i, _folder)
                                 else:
                                     #Once we finish the loop, if a filename with the same name wasnt found, save a QA file
                                     if found==False:
+                                        print("Saving file.")
                                         current_filename = system.sceneName()
                                         system.saveAs(file_name)
                                         system.saveAs(current_filename)
                             else:
                                 #Save the QA file, then immediately resave as the working file so the scene name doesnt change
+                                print("No other QA files found, saving file")
                                 current_filename = system.sceneName()
                                 system.saveAs(file_name)
                                 system.saveAs(current_filename)
@@ -639,7 +726,7 @@ class OEMToolbar():
     
     def getSelectedProject(self):
         #Returns the selected project if valid
-        if len(self.projects)>0:
+        if len(self.projects)>0 and self.selectedProject!=None:
             return self.projects[self.selectedProject]
         return None
     
@@ -685,8 +772,8 @@ class OEMToolbar():
                     #Return a list of component names
                     name = component
                     print(name)
-                    if name not in system.sceneName() and os.path.isdir(component) and not component.startswith("_"):
-                        return_list.append(name)
+                    if component not in system.sceneName() and os.path.isdir(component) and not os.path.basename(component).startswith("_"):
+                        return_list.append(component)
                 else:
                     return return_list
         return []
