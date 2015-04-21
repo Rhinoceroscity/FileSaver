@@ -62,7 +62,7 @@ def findProjectDirectories(levels, startDirs, foldersToFind):
     #Recursively searches through levels of directories and returns a list of all of them
     if (levels>0):
         #The current level we're searching
-        index=0
+        search_index=0
         #Initialize the starting directory to search from.  This is effectively level 1
         currentDirs=startDirs
         #The overall list of projects
@@ -70,7 +70,8 @@ def findProjectDirectories(levels, startDirs, foldersToFind):
         #The total project count, so we can number the project as we create them
         projectsCount = 0
         #While the index is less than the number of levels we're searching through, repeat the next function
-        while (index<levels):
+        while search_index <levels:
+            print("Index: %s, Levels: %s"%(search_index, levels))
             nextDirs = []
             #Iterate through the search directories and find all the directories within them
             for searchDir in currentDirs:
@@ -129,9 +130,11 @@ def findProjectDirectories(levels, startDirs, foldersToFind):
             else:
                 #Once the loop is finished, add one to the index, and also replace the next level search directory list with a
                 #New one comprised only of the directories that this loop found.  If that makes any sense, hooray
-                index+=1
                 currentDirs=[]
                 [currentDirs.append(_dir+"/") for _dir in nextDirs]
+                print("Current Dirs for next level: %s"%(str(currentDirs)))
+                search_index+=1
+                print("Index: %s"%(search_index))
         else:
             print("\n\n**Final Projects List**")
             for x in projectsList:
@@ -146,8 +149,8 @@ class OEMToolbar():
             #Init all the necessary things, like the GUI, the variables, and then populate the appropriate lists
             #Also load user settings if necessary.  Load the user settings after the lists have been populated
             #Otherwise problems might arise.
-            waitfor("""osascript -e 'mount volume "afp://xserve1._afpovertcp._tcp.local/Client_Projects"'""", 30)
-            waitfor("""osascript -e 'mount volume "afp://xserve1._afpovertcp._tcp.local/bto-secure"'""", 30)
+            #waitfor("""osascript -e 'mount volume "afp://xserve1._afpovertcp._tcp.local/Client_Projects"'""", 30)
+            #waitfor("""osascript -e 'mount volume "afp://xserve1._afpovertcp._tcp.local/bto-secure"'""", 30)
             
             #Clear all windows that already exist with these names
             if windows.window("OEMToolbar_Settings", exists=True):
