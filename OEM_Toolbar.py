@@ -904,14 +904,18 @@ class OEMToolbar():
             if len(a_refs)>0:
                 for index, a_ref in enumerate(a_refs):
                     #Create a name for the button and make sure there isnt already one with this name in the selected references list
-                    button_name = os.path.splitext(os.path.split(a_ref)[1])[0]
-                    if not "%sRN"%(button_name.replace(" ", "_")) in s_refs:
+                    label_name = os.path.splitext(os.path.split(a_ref)[1])[0]
+                    if not "%sRN"%(label_name.replace(" ", "_")) in s_refs:
                         #Create a function mid loop to avoid late binding
                         def buttonFunction(event, a_ref=a_ref):
                             self.addReference(a_ref)
                             self.refreshReferencesUI()
+                        
+                        layoutName = "%s_layout"%(label_name.replace(" ", "_"))
                         #Create a button that, when clicked, will add this reference to the scene
-                        windows.button(p = "OEMToolbar_ReferencePanel_Frame_Available_ScrollLayout", command = buttonFunction, l = button_name, w = 190)
+                        windows.rowLayout(layoutName, nc = 2, p = "OEMToolbar_ReferencePanel_Frame_Available_ScrollLayout")
+                        windows.button(p = layoutName, command = buttonFunction, l = "+", h = 18)
+                        windows.text(p = layoutName, l = label_name, align = "left", h = 18)
             else:
                 print("No references found")
             
@@ -919,13 +923,17 @@ class OEMToolbar():
             if len(s_refs)>0:
                 for s_ref in s_refs:
                     print("Loaded Reference: %s"%(s_ref))
-                    button_name = s_ref
+                    label_name = s_ref
                     
                     def buttonFunction(event, s_ref = s_ref):
                         self.deleteReference(s_ref)
                         self.refreshReferencesUI()
                     
-                    windows.button(p = "OEMToolbar_ReferencePanel_Frame_Loaded_ScrollLayout",command = buttonFunction, l = button_name, w = 190)
+                    layoutName = "%s_layout"%(label_name.replace(" ", "_"))
+                    #Create a button that, when clicked, will add this reference to the scene
+                    windows.rowLayout(layoutName, nc = 2, p = "OEMToolbar_ReferencePanel_Frame_Loaded_ScrollLayout")
+                    windows.button(p = layoutName, command = buttonFunction, l = "-", h = 18)
+                    windows.text(p = layoutName, l = label_name, align = "left", h = 18)
             else:
                 print("No references loaded")
     
