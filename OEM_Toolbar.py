@@ -188,12 +188,12 @@ class OEMToolbar():
         #Have a different amount of parts, or no parts at all
         self.selectedProject = int(index)
         #Make sure we've selected a valid project.  This check should never fire if things are handled properly
-        if self.getSelectedProject()!=None:
+        #if self.getSelectedProject()!=None:
             #Make sure this project has at least one part
-            if len(self.getSelectedProject().modelingComponents)>0:
+            #if len(self.getSelectedProject().modelingComponents)>0:
                 #If it does, assign the currently selected part to the first part in the list
-                self.selectedPart = 0
-                return
+                #self.selectedPart = 0
+                #return
         #If we never made it to assigning the part correctly, set it to None
         self.selectedPart = None
 
@@ -655,6 +655,7 @@ class OEMToolbar():
                 return True
                 #return [x[0] for x in versions_sorted]
         print("No previous part versions found.")
+        self.selectedPartVersions=[]
         return False
             
     
@@ -740,11 +741,17 @@ class OEMToolbar():
                     
                     #def fButtonCommand(event, index = index):
                         #self.openPartFolder(index)
-                        
+                    
+                    abbreviatedName = " ".join(component[1].split("_")[1:-1])
+                    if len(abbreviatedName)>10:
+                        abbreviatedName = "..."+abbreviatedName[-5:]
+                    
+                    labelText = "%s_%s"%(abbreviatedName, component[1].split("_")[-1])
+                    
                     windows.rowLayout(layoutName,p = "partVersionsScrollLayout",nc = 2)
                     #windows.button(fButtonName, l = "Finder", p = layoutName, h = 18, w = 40, command = fButtonCommand)
                     windows.button(buttonName, l = "Open", p = layoutName, w = 40, h = 18, command = buttonCommand)
-                    windows.text(labelName, l = "_".join(component[1].split("_")[1:]), p = layoutName, w = 100, h = 18, align = "left")
+                    windows.text(labelName, l = labelText, p = layoutName, w = 100, h = 18, align = "left")
                     #windows.optionMenu("partOptionMenu", e = True, v = self.getSelectedProject().modelingComponents[self.selectedPart][1])
                 #else:
                     #windows.menuItem(l = "None", p = "partOptionMenu")
@@ -834,7 +841,7 @@ class OEMToolbar():
     
     def getSelectedPart(self):
         #Return the name of the selected part
-        if self.getSelectedProject()!=None:
+        if self.getSelectedProject()!=None and self.selectedPart!=None:
             if len(self.getSelectedProject().modelingComponents)>0:
                 return self.getSelectedProject().modelingComponents[self.selectedPart][1]
             else:
@@ -970,6 +977,7 @@ class OEMToolbar():
         def projectOptionMenuChangeCommand(event):
             if windows.optionMenu("projectOptionMenu", q = True, v = True)!="None":
                 self.selectNewProject(int(windows.optionMenu("projectOptionMenu", q = True, sl = True))-1)
+                self.getPreviousPartVersions()
                 self.saveSettings()
                 self.refreshSettingsUI()
                 self.refreshReferencesUI()
