@@ -2,7 +2,7 @@
 import pymel.core
 from pymel.core import windows, system, general, language
 from subprocess import call
-import os, glob, time, shutil, collapseFile
+import os, glob, time, shutil
 #import checkModeling
 
 #Define global variables
@@ -53,7 +53,7 @@ class Project():
         #Modeling components, if found.  If none are found, will simply return None
         #Otherwise, they're stored in pairs.  Long path first, then part name, then numbered part name.
         #Ex self.modelingComponents[0]=[path/to/part, part, numbered part]
-        #In the future this should  be converted into a list of class objects with the appropriate attributes
+        #In the future this should  be converted into a list of objects with the appropriate attributes
         self.modelingComponents=[]
         self.componentsFolder=""
 
@@ -255,7 +255,9 @@ class OEMToolbar():
         self.selectedProject=None
         #Currently selected part in the project
         self.selectedPart=None
-     
+        #Currently selected part versions
+        self.selectedPartVersions = []
+    
     #Load a new file
     def loadFile(self, index, type=0):
         #Attempts a load of different file types
@@ -328,6 +330,8 @@ class OEMToolbar():
                             self.refreshReferencesUI()
                             self.selectedPart = index
                             self.saveSettings()
+                            self.getPreviousPartVersions()
+                            self.refreshSettingsUI()
                         else:
                             #If there are changes, ask if the user is sure they want to continue
                             #If they choose yes, continue with the loading and save no changes
@@ -336,8 +340,21 @@ class OEMToolbar():
                                 self.refreshReferencesUI()
                                 self.selectedPart = index
                                 self.saveSettings()
+                                self.getPreviousPartVersions()
+                                self.refreshSettingsUI()
         except IndexError as E:
             print("Index Error occured while loading: %s"%(E))
+    
+    def loadPreviousVersionFile(self, index):
+        if self.getSelectedProject()!=None and self.getSelectedPart()!=None:
+            _file = self.selectedPartVersions[index]
+            if system.dgmodified()==None:
+                system.openFile(_file[0], f = True)
+                self.refreshReferencesUI()
+            else:
+                if windows.confirmDialog(title = "Unsaved Changes in Scene", message = "There are unsaved changes in the scene.  Would you like to proceed anyways?", button = ['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')=='Yes':
+                    system.openFile(_file[0], f = True)
+                    self.refreshReferencesUI()
     
     def getPartName(self):
         return os.path.split(system.sceneName())[1].split("_")[0]
@@ -441,7 +458,7 @@ class OEMToolbar():
                                 #Similar to the loading function, this just attempts to find the highest version number of the working files
                                 #Then saves an incremental file on top of that with a specific format
                                 #See above for how this code works, its pretty much the same
-                                files = glob.glob(working_dir+"/*")
+                                files = glob.glob(working_dir+"/*.mb")
                                 if len(files)>0:
                                     highest_num=0
                                     for file in files:
@@ -476,10 +493,14 @@ class OEMToolbar():
                                     if windows.confirmDialog(title = "Save Part File?", message = "Save the first version of this part? You will not be prompted when saving new versions after this.", button = ['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')=='Yes':
                                         file_name = os.path.join(working_dir , "%s_%s_v%s.mb"%(part_name, self.username, num))#part_name + "_" + self.username + "_" + "v" + num + ".mb")
                                         system.saveAs(file_name)
+                                        self.getPreviousPartVersions()
+                                        self.refreshSettingsUI()
                                 else:
                                     #Otherwise, dont prompt the user, just save
                                     file_name = os.path.join(working_dir , "%s_%s_v%s.mb"%(part_name, self.username, num))
                                     system.saveAs(file_name)
+                                    self.getPreviousPartVersions()
+                                    self.refreshSettingsUI()
                             else:
                                 windows.confirmDialog(title = "Scene Changed", message = "The scene has been switched from the originally loaded one.  Please re-load your scene using the heirarchy tool.", button = "Dismiss")
                         else:
@@ -605,6 +626,38 @@ class OEMToolbar():
         #file.write(str(windows.optionMenu("filterMakeMenu",q = True, v = True)) + "\n")
         file.close()
     
+    def getPreviousPartVersions(self):
+        if self.getSelectedProject()!=None and self.getSelectedPart()!=None:
+            part_dir = os.path.join(self.getSelectedProject().modelingComponents[int(self.selectedPart)][0], "Working")
+            print("Finding part versions in part dir %s"%(part_dir))
+            versions = glob.glob(part_dir+"/*.mb")
+            print(str(versions))
+            if len(versions)>0:
+                versions_sorted = []
+                for _file in versions:
+                    
+                    _fname = str(os.path.split(_file)[1].split(".")[0])
+                    print("Found file version %s"%(_fname))
+                    filenum=''
+                    
+                    for x in reversed(_fname):
+                        if x.isdigit():
+                            filenum = x + filenum
+                        else:
+                            break
+                    if filenum!='':
+                        filenum = int(filenum)
+                        versions_sorted.append((_file, filenum, _fname))
+                
+                versions_sorted.sort(key=lambda x: x[1], reverse = True)
+                self.selectedPartVersions = [(x[0], x[2]) for x in versions_sorted]
+                print("New part versions list: %s"%(str(self.selectedPartVersions)))
+                return True
+                #return [x[0] for x in versions_sorted]
+        print("No previous part versions found.")
+        return False
+            
+    
     def refreshSettingsUI(self):
         print(str(self.getSelectedProject()))
         print(str(self.selectedPart))
@@ -641,6 +694,10 @@ class OEMToolbar():
             current_buttons = windows.scrollLayout("partsScrollLayout", q = True, ca = True)
             if current_buttons!=None:
                 [windows.deleteUI(x) for x in current_buttons]
+            
+            current_buttons = windows.scrollLayout("partVersionsScrollLayout", q = True, ca = True)
+            if current_buttons!=None:
+                [windows.deleteUI(x) for x in current_buttons]
             #First query whether or not we have a valid project selected.  Otherwise theres no point
             #in trying to query the parts list, since its derivative of the project directory
             #if windows.optionMenu("projectOptionMenu", q = True, v = True)=="None":
@@ -653,10 +710,11 @@ class OEMToolbar():
                 #[windows.deleteUI(x) for x in windows.optionMenu("partOptionMenu", q = True, ill = True)]
                 for index, component in enumerate(self.getSelectedProject().modelingComponents):
                     #windows.menuItem(l = component[1], p = "partOptionMenu")
-                    
-                    layoutName = "%s_layout"%(component[1].replace(" ","_"))
-                    buttonName = "%s_button"%(component[1].replace(" ","_"))
-                    fButtonName = "%s_fbutton"%(component[1].replace(" ","_"))
+                    componentNameFixed = (component[1].replace(" ","_"))
+                    labelName = "%s_label"%(componentNameFixed)
+                    layoutName = "%s_layout"%(componentNameFixed)
+                    buttonName = "%s_button"%(componentNameFixed)
+                    fButtonName = "%s_fbutton"%(componentNameFixed)
                     
                     def buttonCommand(event, index = index):
                         self.loadFile(index)
@@ -664,10 +722,29 @@ class OEMToolbar():
                     def fButtonCommand(event, index = index):
                         self.openPartFolder(index)
                         
-                    windows.rowLayout(layoutName,p = "partsScrollLayout",nc = 2)
-                    windows.button(buttonName, l = component[1], p = layoutName, w = 330, h = 18, command = buttonCommand)
-                    windows.button(fButtonName, l = "Finder", p = layoutName, h = 18, w = 50, command = fButtonCommand)
+                    windows.rowLayout(layoutName,p = "partsScrollLayout",nc = 3)
+                    windows.button(fButtonName, l = "Finder", p = layoutName, h = 18, w = 40, command = fButtonCommand)
+                    windows.button(buttonName, l = "Open", p = layoutName, w = 40, h = 18, command = buttonCommand)
+                    windows.text(labelName, l = component[1], p = layoutName, w = 100, h = 18, align = "left")
                     
+                for index, component in enumerate(self.selectedPartVersions):
+                    #windows.menuItem(l = component[1], p = "partOptionMenu")
+                    componentNameFixed = (component[1].replace(" ","_"))
+                    labelName = "%s_label"%(componentNameFixed)
+                    layoutName = "%s_layout"%(componentNameFixed)
+                    buttonName = "%s_button"%(componentNameFixed)
+                    #fButtonName = "%s_fbutton"%(componentNameFixed)
+                    
+                    def buttonCommand(event, index = index):
+                        self.loadPreviousVersionFile(index)
+                    
+                    #def fButtonCommand(event, index = index):
+                        #self.openPartFolder(index)
+                        
+                    windows.rowLayout(layoutName,p = "partVersionsScrollLayout",nc = 2)
+                    #windows.button(fButtonName, l = "Finder", p = layoutName, h = 18, w = 40, command = fButtonCommand)
+                    windows.button(buttonName, l = "Open", p = layoutName, w = 40, h = 18, command = buttonCommand)
+                    windows.text(labelName, l = "_".join(component[1].split("_")[1:]), p = layoutName, w = 100, h = 18, align = "left")
                     #windows.optionMenu("partOptionMenu", e = True, v = self.getSelectedProject().modelingComponents[self.selectedPart][1])
                 #else:
                     #windows.menuItem(l = "None", p = "partOptionMenu")
@@ -949,23 +1026,30 @@ class OEMToolbar():
         windows.separator(w = overall_width, h = 20, style = "in")
         ''''''
         windows.frameLayout(l = "Parts",w = overall_width, cl = False, cll = False)
-        windows.columnLayout("Part Actions")
+        windows.rowColumnLayout("Part Actions", nc = 2)
         
-        #windows.optionMenu("partOptionMenu", l = "Selected Part: ", w = overall_width, cc = lambda event: partChangeCommand())
-        windows.scrollLayout("partsScrollLayout", w = overall_width, h = 200)
+        windows.text(l = "Parts in Project")
+        windows.text(l = "Previous Versions")
         
+        windows.scrollLayout("partsScrollLayout", w = overall_width / 2, h = 200)
         ''' -Part button- 
         windows.rowLayout(nc = 2)
         windows.button("testButton", l = "Test Part", w = overall_width * 0.667)
         windows.button("testButtonFinder", l = "Finder")
         windows.setParent(u = True)
          -Part button- '''
-        
         windows.setParent(u = True)
-        #windows.rowLayout(nc = 2)
-        #windows.button("loadButton", l = "Load Selected Part", w = overall_width*0.5, h=18, c = lambda event: self.loadFile())
-        #windows.button("openPartFolderButton", l = "Open Finder Window", w = overall_width, h = 18, c = lambda event: self.openPartFolder())
-        #windows.setParent(u = True)
+
+        
+        windows.scrollLayout("partVersionsScrollLayout", w = overall_width / 2, h = 200)
+        ''' -Part button- 
+        windows.rowLayout(nc = 2)
+        windows.button("testButton", l = "Test Part", w = overall_width * 0.667)
+        windows.button("testButtonFinder", l = "Finder")
+        windows.setParent(u = True)
+         -Part button- '''
+        windows.setParent(u = True)        
+        
         windows.setParent(u = True)
         windows.setParent(u = True)
         windows.setParent(u = True)
