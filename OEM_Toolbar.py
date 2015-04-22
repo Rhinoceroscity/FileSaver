@@ -712,10 +712,10 @@ class OEMToolbar():
                 for index, component in enumerate(self.getSelectedProject().modelingComponents):
                     #windows.menuItem(l = component[1], p = "partOptionMenu")
                     componentNameFixed = (component[1].replace(" ","_"))
-                    labelName = "%s_label"%(componentNameFixed)
-                    layoutName = "%s_layout"%(componentNameFixed)
-                    buttonName = "%s_button"%(componentNameFixed)
-                    fButtonName = "%s_fbutton"%(componentNameFixed)
+                    labelName = "%s_mComplabel"%(componentNameFixed)
+                    layoutName = "%s_mComplayout"%(componentNameFixed)
+                    buttonName = "%s_mCompbutton"%(componentNameFixed)
+                    fButtonName = "%s_mCompfbutton"%(componentNameFixed)
                     
                     def buttonCommand(event, index = index):
                         self.loadFile(index)
@@ -731,9 +731,9 @@ class OEMToolbar():
                 for index, component in enumerate(self.selectedPartVersions):
                     #windows.menuItem(l = component[1], p = "partOptionMenu")
                     componentNameFixed = (component[1].replace(" ","_"))
-                    labelName = "%s_label"%(componentNameFixed)
-                    layoutName = "%s_layout"%(componentNameFixed)
-                    buttonName = "%s_button"%(componentNameFixed)
+                    labelName = "%s_sPartlabel"%(componentNameFixed)
+                    layoutName = "%s_sPartlayout"%(componentNameFixed)
+                    buttonName = "%s_sPartbutton"%(componentNameFixed)
                     #fButtonName = "%s_fbutton"%(componentNameFixed)
                     
                     def buttonCommand(event, index = index):
@@ -891,9 +891,9 @@ class OEMToolbar():
         #If the window exists, refresh its UI
         if windows.window("OEMToolbar_ReferencePanel", exists = True):
             #Remove all the buttons for potential references to add/remove
-            if windows.scrollLayout("OEMToolbar_ReferencePanel_Frame_Available_ScrollLayout",   q=True, ca=True)!=None and len(windows.scrollLayout("OEMToolbar_ReferencePanel_Frame_Available_ScrollLayout",   q=True, ca=True))>0:
+            if windows.scrollLayout("OEMToolbar_ReferencePanel_Frame_Available_ScrollLayout",   q=True, ca=True)!=None:
                 [windows.deleteUI(x) for x in windows.scrollLayout("OEMToolbar_ReferencePanel_Frame_Available_ScrollLayout",q=True, ca=True)]
-            if windows.scrollLayout("OEMToolbar_ReferencePanel_Frame_Loaded_ScrollLayout",   q=True, ca=True)!=None and len(windows.scrollLayout("OEMToolbar_ReferencePanel_Frame_Loaded_ScrollLayout",   q=True, ca=True))>0:
+            if windows.scrollLayout("OEMToolbar_ReferencePanel_Frame_Loaded_ScrollLayout",   q=True, ca=True)!=None:
                 [windows.deleteUI(y) for y in windows.scrollLayout("OEMToolbar_ReferencePanel_Frame_Loaded_ScrollLayout",   q=True, ca=True)]
             
             #Get a list of available and selected references from the appropriate functions
@@ -911,7 +911,7 @@ class OEMToolbar():
                             self.addReference(a_ref)
                             self.refreshReferencesUI()
                         
-                        layoutName = "%s_layout"%(label_name.replace(" ", "_"))
+                        layoutName = "%s_aRefslayout"%(label_name.replace(" ", "_"))
                         #Create a button that, when clicked, will add this reference to the scene
                         windows.rowLayout(layoutName, nc = 2, p = "OEMToolbar_ReferencePanel_Frame_Available_ScrollLayout")
                         windows.button(p = layoutName, command = buttonFunction, l = "+", h = 18)
@@ -929,7 +929,7 @@ class OEMToolbar():
                         self.deleteReference(s_ref)
                         self.refreshReferencesUI()
                     
-                    layoutName = "%s_layout"%(label_name.replace(" ", "_"))
+                    layoutName = "%s_sRefslayout"%(label_name.replace(" ", "_"))
                     #Create a button that, when clicked, will add this reference to the scene
                     windows.rowLayout(layoutName, nc = 2, p = "OEMToolbar_ReferencePanel_Frame_Loaded_ScrollLayout")
                     windows.button(p = layoutName, command = buttonFunction, l = "-", h = 18)
