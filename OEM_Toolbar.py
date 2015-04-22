@@ -2,7 +2,7 @@
 import pymel.core
 from pymel.core import windows, system, general, language
 from subprocess import call
-import os, glob, time, shutil
+import os, glob, time, shutil, collapseFile
 #import checkModeling
 
 #Define global variables
@@ -255,9 +255,9 @@ class OEMToolbar():
         self.selectedProject=None
         #Currently selected part in the project
         self.selectedPart=None
-    
+     
     #Load a new file
-    def loadFile(self, type=0):
+    def loadFile(self, index, type=0):
         #Attempts a load of different file types
         #Right now there's only one, type 0, which is a working file for modelers
         #In the future there will be support for loading and working with QA files, and clay complete files for scene assembly
@@ -265,10 +265,10 @@ class OEMToolbar():
             #If we have a valid project selected...
             if self.getSelectedProject()!=None:
                 #If we have a valid part selected...
-                if self.selectedPart!=None:
+                if index!=None:
                     #Retrieve the directory for the selected part from the components array
                     #In the future, the parts should be stored as a class rather than an obtuse multi-dimensional array
-                    part_directory = self.getSelectedProject().modelingComponents[self.selectedPart][0]
+                    part_directory = self.getSelectedProject().modelingComponents[index][0]
                     #Append the "Working" folder onto the part directory
                     working_dir = os.path.join(part_directory, "Working")
                     #Set the latest file name
@@ -281,7 +281,7 @@ class OEMToolbar():
                             print("No working directory for this model found.")
                         else:
                             #Get all the files inside the working dir, which should all be mb files with a specific format
-                            files = glob.glob(working_dir+"/*")
+                            files = glob.glob(working_dir+"/*.mb")
                             #If theres at least one file in there...
                             if len(files)>0:
                                 #Set the highest number found in the incremental saves
@@ -326,12 +326,16 @@ class OEMToolbar():
                         if system.dgmodified()==None:
                             system.openFile(latest_file, f = True)
                             self.refreshReferencesUI()
+                            self.selectedPart = index
+                            self.saveSettings()
                         else:
                             #If there are changes, ask if the user is sure they want to continue
                             #If they choose yes, continue with the loading and save no changes
                             if windows.confirmDialog(title = "Unsaved Changes in Scene", message = "There are unsaved changes in the scene.  Would you like to proceed anyways?", button = ['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')=='Yes':
                                 system.openFile(latest_file, f = True)
                                 self.refreshReferencesUI()
+                                self.selectedPart = index
+                                self.saveSettings()
         except IndexError as E:
             print("Index Error occured while loading: %s"%(E))
     
@@ -558,7 +562,7 @@ class OEMToolbar():
                                     else:
                                         #Otherwise, move it into a folder with the necessary info
                                         print("Moving other QA file into folder")
-                                        _folder = os.path.join(qa_dir,os.path.split(i)[1].split(".")[0])
+                                        _folder = os.path.join(qa_dir,"_old/%s"%(os.path.split(i)[1].split(".")[0]))
                                         os.makedirs(_folder)
                                         shutil.move(i, _folder)
                                 else:
@@ -634,21 +638,39 @@ class OEMToolbar():
             else:
                 windows.optionMenu("projectOptionMenu", e = True, v = "None")
             
+            current_buttons = windows.scrollLayout("partsScrollLayout", q = True, ca = True)
+            if current_buttons!=None:
+                [windows.deleteUI(x) for x in current_buttons]
             #First query whether or not we have a valid project selected.  Otherwise theres no point
             #in trying to query the parts list, since its derivative of the project directory
             #if windows.optionMenu("projectOptionMenu", q = True, v = True)=="None":
-            if self.getSelectedProject()==None:
+            if self.getSelectedProject()!=None and len(self.getSelectedProject().modelingComponents)>0:
                 #Delete all menu items and create a "None" item if there is none
-                [windows.deleteUI(x) for x in windows.optionMenu("partOptionMenu", q = True, ill = True)]
-                windows.menuItem(l = "None", p = "partOptionMenu")
-            else:
+                #[windows.deleteUI(x) for x in windows.optionMenu("partOptionMenu", q = True, ill = True)]
+
+                #windows.menuItem(l = "None", p = "partOptionMenu")
                 #Delete all the menu items in the part option menu dropdown
-                [windows.deleteUI(x) for x in windows.optionMenu("partOptionMenu", q = True, ill = True)]
-                if len(self.getSelectedProject().modelingComponents)>0:
-                    [windows.menuItem(l = component[1], p = "partOptionMenu") for component in self.getSelectedProject().modelingComponents]
-                    windows.optionMenu("partOptionMenu", e = True, v = self.getSelectedProject().modelingComponents[self.selectedPart][1])
-                else:
-                    windows.menuItem(l = "None", p = "partOptionMenu")
+                #[windows.deleteUI(x) for x in windows.optionMenu("partOptionMenu", q = True, ill = True)]
+                for index, component in enumerate(self.getSelectedProject().modelingComponents):
+                    #windows.menuItem(l = component[1], p = "partOptionMenu")
+                    
+                    layoutName = "%s_layout"%(component[1].replace(" ","_"))
+                    buttonName = "%s_button"%(component[1].replace(" ","_"))
+                    fButtonName = "%s_fbutton"%(component[1].replace(" ","_"))
+                    
+                    def buttonCommand(event, index = index):
+                        self.loadFile(index)
+                    
+                    def fButtonCommand(event, index = index):
+                        self.openPartFolder(index)
+                        
+                    windows.rowLayout(layoutName,p = "partsScrollLayout",nc = 2)
+                    windows.button(buttonName, l = component[1], p = layoutName, w = 330, h = 18, command = buttonCommand)
+                    windows.button(fButtonName, l = "Finder", p = layoutName, h = 18, w = 50, command = fButtonCommand)
+                    
+                    #windows.optionMenu("partOptionMenu", e = True, v = self.getSelectedProject().modelingComponents[self.selectedPart][1])
+                #else:
+                    #windows.menuItem(l = "None", p = "partOptionMenu")
         
     def loadSettings(self):
         #Load the settings from the save file
@@ -670,7 +692,7 @@ class OEMToolbar():
                                     if part_name == part[1]:
                                         self.selectedPart = index2
                                         if windows.confirmDialog(title = "Load previous scene?",message= "Do you want to automatically load the last scene you were working on?", button=["Yes","No"], defaultButton = "Yes", cancelButton = "No", dismissString="No")=="Yes":
-                                            self.loadFile()
+                                            self.loadFile(self.selectedPart)
                                         return
                                 else:
                                     self.selectedPart = 0
@@ -706,11 +728,11 @@ class OEMToolbar():
             else:
                 windows.confirmDialog(title = "Project Not Found", message = "The selected project folder cannot be found.", button=["Dismiss"])
 
-    def openPartFolder(self):
+    def openPartFolder(self, index):
         #Opens a finder window of the specified part
         if self.getSelectedProject()!=None:
-            if self.selectedPart!=None:
-                part_dir = self.getSelectedProject().modelingComponents[self.selectedPart][0]
+            if index!=None:
+                part_dir = self.getSelectedProject().modelingComponents[index][0]
                 if (os.path.isdir(part_dir)):
                     call(["open", "-R", part_dir])
                 else:
@@ -879,12 +901,12 @@ class OEMToolbar():
             self.saveSettings()
             self.refreshSettingsUI()
                 
-        def partChangeCommand():
-            if windows.optionMenu("partOptionMenu", q=True, v=True)!="None":
-                self.selectedPart = int(windows.optionMenu("partOptionMenu", q=True, sl=True))-1
-                self.saveSettings()
-                self.loadFile()
-                self.refreshSettingsUI()
+        #def partChangeCommand():
+        #    if windows.optionMenu("partOptionMenu", q=True, v=True)!="None":
+        #        self.selectedPart = int(windows.optionMenu("partOptionMenu", q=True, sl=True))-1
+        #        self.saveSettings()
+        #        self.loadFile()
+        #        self.refreshSettingsUI()
         
         overall_width = 400
         
@@ -929,11 +951,21 @@ class OEMToolbar():
         windows.frameLayout(l = "Parts",w = overall_width, cl = False, cll = False)
         windows.columnLayout("Part Actions")
         
-        windows.optionMenu("partOptionMenu", l = "Selected Part: ", w = overall_width, cc = lambda event: partChangeCommand())
+        #windows.optionMenu("partOptionMenu", l = "Selected Part: ", w = overall_width, cc = lambda event: partChangeCommand())
+        windows.scrollLayout("partsScrollLayout", w = overall_width, h = 200)
+        
+        ''' -Part button- 
         windows.rowLayout(nc = 2)
-        #windows.button("loadButton", l = "Load Selected Part", w = overall_width*0.5, h=18, c = lambda event: self.loadFile())
-        windows.button("openPartFolderButton", l = "Open Finder Window", w = overall_width, h = 18, c = lambda event: self.openPartFolder())
+        windows.button("testButton", l = "Test Part", w = overall_width * 0.667)
+        windows.button("testButtonFinder", l = "Finder")
         windows.setParent(u = True)
+         -Part button- '''
+        
+        windows.setParent(u = True)
+        #windows.rowLayout(nc = 2)
+        #windows.button("loadButton", l = "Load Selected Part", w = overall_width*0.5, h=18, c = lambda event: self.loadFile())
+        #windows.button("openPartFolderButton", l = "Open Finder Window", w = overall_width, h = 18, c = lambda event: self.openPartFolder())
+        #windows.setParent(u = True)
         windows.setParent(u = True)
         windows.setParent(u = True)
         windows.setParent(u = True)
